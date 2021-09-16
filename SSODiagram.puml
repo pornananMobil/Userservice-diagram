@@ -1,0 +1,181 @@
+@startuml
+'https://plantuml.com/component-diagram
+
+title SSP Single Sign On Diagram
+
+skinparam linetype ortho
+
+
+note as a
+/'
+    *1-CLick will use Auth0 as IDP
+    ** <font color=red> 1 click need to provide Role/ permission  / Sold to / business line
+    * No duplicate ID between 2 IDP
+    * Not required ACE ID synch to SSP
+    * SSP user need to exist in AUTH0 by
+    ** Migration during go live
+    ** New user Create from 1 Click process (API)
+    ** Manully create user from new dashboard APP
+
+    Remark
+    * As of now 1 Click do not have the process to check duplicate email
+    ** Create ID will fail with message that ID exist in other system please contact CS
+    ** Required to manually disable id in PING
+    ** <font color=red> Or we can auto disable / delete the ID but we should not allow customer to disable user out side their org
+    * Required federation from PING to Auth0 , but federation from Auth0 to PING is not required
+    * user can't have a mix role (admin + none admin)
+
+    **Internal user **
+    * Internal user can't use SSO to order page
+    * We can set SSO for internal
+    * <font color=red> Intenal user need to send to SSP !!!
+    * **Internal user need to ACE via Back office**
+
+    *To send email from AUTH0, 3party SMTPService need to be set up.
+
+    *Ping or Auth0 may need to show the IDP option for user to select
+
+'/
+
+
+end note
+
+
+together {
+    actor "SSP external users " as SSPUsers
+    actor ACEUsers
+    actor OthersUsers
+    actor 1clickUsers
+    actor InternalUsers
+}
+
+
+
+package "Other Apps"{
+    [Login] as OtherAppsLogin
+}
+
+package "SSP" {
+   [Login] as SSPLogin
+   [OrderPage] as SSPOrder
+   [3PartyApps] as 3prApps
+   database SSPDB
+}
+package "ACE"{
+       [Login] as ACELogin
+       [OrderPage] as AceOrder
+       database ACEDB
+}
+
+package "1-Click" {
+       [Login] as 1ClickLogon
+}
+
+package XomIntegration{
+    [Kafka]
+}
+
+
+package "Auth0" {
+
+
+    [Sign in page] as SingIn
+
+    component "Authentication" {
+
+
+      frame "SSP Users" as DBConnection {
+        database Auth0DB
+      }
+      frame "Internal Users" as AzureConnection {
+             [Federate] as Auth0AzureFederate
+      }
+
+    }
+
+    [Notification]
+
+}
+
+component "EMCloudAD Azure AD" {
+  database AzureDB
+  [Federate] as AzureFederate
+}
+
+
+
+component "PING" {
+  [Federate] as PingFederate
+  [Sign in page] as PingSingIn
+  database ADLDS
+    note as n2
+        In case user create by 1 click
+        but not in SSP scope
+    end note
+
+}
+
+frame SMTPService {
+    [Email]
+}
+
+
+' 1click user log in
+1clickUsers -> 1ClickLogon
+1ClickLogon -> SingIn : Redirect
+SingIn <-> Auth0DB
+
+
+' ACE user
+ACEUsers -> ACELogin #Navy
+ACELogin -> PingSingIn #Navy : Redirect
+PingSingIn <-> ADLDS #Navy
+PingSingIn <-> n2 #Navy
+n2 <-> PingFederate #Navy
+
+PingFederate <-> Auth0DB #Navy
+
+
+'Other Apps
+
+
+
+OthersUsers -> OtherAppsLogin #Pink
+OtherAppsLogin -> PingSingIn #Pink
+PingSingIn -> ADLDS #Pink
+
+' SSP external user
+SSPUsers -> SSPLogin #Orange
+SSPLogin -> SingIn #Orange
+SingIn <-> Auth0DB #Orange
+
+'SSP Extennal go to ACE
+SSPUsers -> SSPOrder #Cyan
+SSPOrder -> AceOrder #Cyan : Redirect
+AceOrder <-> PingFederate #Cyan
+PingFederate <-> Auth0DB #Cyan
+
+' SSP external go to 3pr app
+SSPUsers -> 3prApps #Green
+3prApps -> OtherAppsLogin #Green
+OtherAppsLogin <-> PingFederate #Green
+PingFederate -> DBConnection #Green
+
+'Intenral use SSP
+InternalUsers ->SSPLogin #Black
+SSPLogin-> SingIn #Black
+SingIn <-> Auth0AzureFederate #Black
+AzureFederate <-> Auth0AzureFederate #Black
+AzureFederate <-> AzureDB #Black
+
+
+
+'User synch
+Auth0DB -> [Kafka] #MediumOrchid
+[Kafka] -> ACEDB #MediumOrchid
+[Kafka] -> SSPDB #MediumOrchid
+
+Notification -> [Email] : Notification Email
+
+
+@enduml
