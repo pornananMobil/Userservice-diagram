@@ -1,0 +1,37 @@
+@startuml
+
+actor "User" as XOM
+
+== User DashBoard, User Search Flow ==
+    XOM -> IAM : Search Page ()
+    XOM <-- IAM : Search page
+
+    XOM -> IAM : Search by (ID / Name  )
+        activate IAM
+            IAM -> IAMBFF : Search by (ID / Name +  Access token) )
+                activate IAMBFF
+                    IAMBFF -> AUTH0 : Search by (ID / Name / Add sold to from Access token)
+                        activate AUTH0
+                            IAMBFF <-- AUTH0 : UserList
+                        deactivate AUTH0
+                IAM <-- IAMBFF : UserList
+
+                deactivate IAMBFF
+            XOM <-- IAM : UserList
+        deactivate IAM
+
+    XOM -> IAM : SelectUser
+        activate IAM
+            IAM -> IAMBFF : getUserDetail()
+                activate IAMBFF
+                    IAMBFF -> AUTH0 : getUserDetail()
+                    activate AUTH0
+                        IAMBFF <-- AUTH0 : UserDetail
+                    deactivate AUTH0
+                    IAM <-- IAMBFF : UserDetail
+                deactivate IAMBFF
+            IAM <--XOM : UserDetail
+        deactivate IAM
+
+
+@enduml

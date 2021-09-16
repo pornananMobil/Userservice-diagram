@@ -1,0 +1,187 @@
+@startuml
+'https://plantuml.com/component-diagram
+
+actor "XOM account admin" as XOM
+
+== User DashBoard, User Update Flow ==
+   ... <Font color=red size=30> Continue from User Search Flow...
+    XOM -> IAM : Select user to Modify
+    IAM -> XOM : ModifyUserPage
+    note left of IAM
+            Get select current user detail from Searh flow
+    end note
+
+   opt PasswordReset
+    XOM -> IAM : PasswordReset
+        activate IAM
+            IAM -> IAMBFF : PasswordReset
+            activate IAMBFF
+                IAMBFF -> AUTH0 : PasswordReset
+                    activate AUTH0
+                        IAMBFF <-- AUTH0 : confirm
+                    deactivate AUTH0
+                IAM <-- IAMBFF : confirm
+            deactivate IAMBFF
+        XOM <-- IAM : confirm
+        deactivate IAM
+    end opt
+
+    opt activate/deactivate user
+    XOM -> IAM : UserActivate/Deactivate
+            activate IAM
+                IAM -> IAMBFF : UserActivate/Deactivate
+                activate IAMBFF
+                    IAMBFF -> IDPBFF : UserActivate/Deactivate
+                        activate IDPBFF
+                            IDPBFF -> ConfluentKafka : Publish user update topic
+                                activate ConfluentKafka
+                                    ConfluentKafka --> IDPBFF :confirm
+                                deactivate ConfluentKafka
+                            IAMBFF <-- IDPBFF : confirm
+                        deactivate IDPBFF
+                    IAM <-- IAMBFF : confirm
+                deactivate IAMBFF
+            XOM <-- IAM : confirm
+            deactivate IAM
+     end opt
+
+     opt Update profile
+      XOM -> IAM : Update Profile (ID / Email)
+                activate IAM
+                    IAM -> IAMBFF : SynchUser()
+                    activate IAMBFF
+                        IAMBFF -> IDPBFF : SynchUser()
+                         activate IDPBFF
+                             IDPBFF -> ConfluentKafka : Publish user update topic
+                                 activate ConfluentKafka
+                                     ConfluentKafka --> IDPBFF :confirm
+                                 deactivate ConfluentKafka
+                             IAMBFF <-- IDPBFF : confirm
+                         deactivate IDPBFF
+                     IAM <-- IAMBFF : confirm
+                     deactivate IAMBFF
+               XOM <-- IAM : confirm
+      deactivate IAM
+
+     end opt
+
+    opt update role
+    XOM -> IAM : Update Role
+
+        activate IAM
+        alt Admin role
+                IAM -> IAMBFF : getRole(salesarea,RoleType.Admin)
+                    activate IAMBFF
+                        IAMBFF -> IDPBFF: getRole(salesarea,RoleType.Admin)
+                          activate IDPBFF
+                            IDPBFF -> UserServiceDB : getRole(salesarea,RoleType.Admin)
+                            IDPBFF <-- UserServiceDB    : AdminRoleList
+                        IAMBFF <-- IDPBFF : AdminRoleList
+                     deactivate IDPBFF
+
+                    IAM <-- IAMBFF : AdminRoleList
+                  deactivate IAMBFF
+
+                 IAM ->IAM : display current role + role opiton
+               deactivate IAM
+        else Non-Admin role
+            IAM -> IAMBFF : getRole(salesarea,RoleType.NonAdmin)
+                activate IAMBFF
+                        IAMBFF -> IDPBFF: getRole(salesarea,RoleType.NonAdmin)
+                          activate IDPBFF
+                            IDPBFF -> UserServiceDB : getRole(salesarea,RoleType.NonAdmin)
+                            IDPBFF <-- UserServiceDB    : NonAdminRoleList
+                            IAMBFF <-- IDPBFF : NonAdminRoleList
+                        deactivate IDPBFF
+                IAM <-- IAMBFF : NonAdminRoleList
+                deactivate IAMBFF
+            IAM ->IAM : display current role + role opiton
+        end alt
+    end opt
+
+    opt update Soldto/shipto
+        XOM -> IAM : Update (Sold to / ship to)
+
+
+        alt if remove option
+            IAM->IAM :remove sold to or shipto from user
+        else add sold to
+                loop select sold to until click Submit request
+                    XOM ->IAM : Search Sold to (ID / Name)
+                        activate IAM
+                            IAM -> IAMBFF : Search Sold to (ID / Name)
+                                activate IAMBFF
+                                    IAMBFF -> CDS : Search Sold to (ID / Name)
+                                        activate CDS
+                                            IAMBFF <-- CDS : List sold to + partner
+                                        deactivate CDS
+                                    IAMBFF -> IAMBFF : Filter data Sold to + partner + salesarea only
+                                    IAM <-- IAMBFF : Sold to (with partner) list
+                                deactivate IAMBFF
+                            IAM --> XOM : Sold to list
+                        deactivate IAM
+
+
+                   XOM -> IAM : Add Sold to / Update (salesarea)
+
+
+                    XOM -> IAM : select RoleType
+                        activate IAM
+                            alt RoleType = Admin
+                            IAM -> IAMBFF : getRoleList(salesarealist,RoleType.Admin)
+                                activate IAMBFF
+                                    IAMBFF -> IDPBFF : getRole(salesarealist,RoleType.Admin)
+                                        activate IDPBFF
+                                            IDPBFF -> UserServiceDB : getRole(salesarealist,RoleType.Admin)
+                                            IDPBFF <-- UserServiceDB
+                                            IAMBFF <-- IDPBFF :  AdminRoleList
+                                        deactivate IDPBFF
+                                    IAM <-- IAMBFF : AdminRoleList
+                                deactivate IAMBFF
+                                IAM --> XOM : AdminRoleList as pre-select with readonly access
+                                IAM ->IAM : Assgin Wildcard for all ship to
+                            else RoleType = Non-Admin
+                               IAM -> IAMBFF : getRoleList(salesarealist,RoleType.NonAdmin)
+                                   activate IAMBFF
+                                        IAMBFF -> IDPBFF : getRole(salesarealist,RoleType.NonAdmin)
+                                            activate IDPBFF
+                                                IDPBFF -> UserServiceDB : getRole(salesarealist,RoleType.NonAdmin)
+                                                IDPBFF <-- UserServiceDB
+                                                IAMBFF <-- IDPBFF :  NonAdminRoleList
+                                            deactivate IDPBFF
+                                        IAM <--IAMBFF : NonAdminRoleList
+                                   deactivate IAMBFF
+                                    IAM --> XOM : NonAdminRoleList
+                                    XOM -> IAM : Select roles
+                                    IAM -> IAM : Select Ship to
+                            end
+
+                        deactivate IAM
+
+                end loop
+        XOM -> IAM : UpdateUser()
+        activate IAM
+                    IAM -> IAMBFF : SynchUser()
+                    activate IAMBFF
+                        IAMBFF -> IDPBFF : SynchUser()
+                         activate IDPBFF
+                             IDPBFF -> ConfluentKafka : Publish user update topic
+                                 activate ConfluentKafka
+                                     ConfluentKafka --> IDPBFF :confirm
+                                 deactivate ConfluentKafka
+                             IAMBFF <-- IDPBFF : confirm
+                         deactivate IDPBFF
+                     IAM <-- IAMBFF : confirm
+                     deactivate IAMBFF
+               XOM <-- IAM : confirm
+      deactivate IAM
+
+        end
+
+
+    end opt
+
+
+
+
+@enduml

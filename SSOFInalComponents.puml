@@ -1,0 +1,300 @@
+
+@startuml
+'https://plantuml.com/component-diagram
+
+title User Service Diagram
+
+left to right direction
+
+skinparam linetype ortho
+
+
+
+frame "Customer Domain Service" as CDS {
+    component "SearchSoldto" as CDSSearchSoldto {
+        port " " as CDSSearchSoldtoPort
+    }
+}
+
+
+package "SSP" {
+   [Login] as SSPLogin
+   [OrderPage] as SSPOrder
+   [UserDashboardPage] as SSPUserDashboard
+   [KafkaListener] as SSPKafkaListener
+}
+
+package "ACE"{
+       [Login] as ACELogin
+        [OrderPage] as ACEOrder
+        [KafkaListener] as ACEKafkaListener
+
+       database ACEDB
+}
+
+
+together {
+    package XomIntegration{
+        [Kafka] as xomKafka
+    }
+
+    package ConferentKafka{
+        component "User Topic" as GlobalKafka{
+            port " " as UserTopicport
+        }
+    }
+}
+
+package "Auth0" {
+
+
+    component "Authentication" {
+        [Signin] as Auth0SingIn
+        port " " as Auth0AuthenticationPort
+
+    }
+
+   component "UserManagementAPI" as AUTH0UserManagementAPI {
+        port " " as AUTH0UserManagementAPIPort
+   }
+
+    [Notification]
+
+
+    together {
+      frame "SSP Users" as DBConnection {
+        database Auth0DB
+      }
+      frame "Internal Users" as AzureConnection {
+             [Federate] as Auth0AzureFederate
+      }
+      }
+
+}
+
+
+component "EMCloudAD Azure AD" {
+  database AzureDB
+  [Signin] as AzureSignIn
+  [Federate] as AzureFederate
+}
+
+
+
+component "PING" {
+  component Federate as PingFederate {
+    port "In" as PingFederatePort
+    port "Out" as PingAuth0FederatePort
+
+  }
+  component "Signin" as PingSingIn{
+    port " " as PingSingInPort
+    port " " as PingAdldsSingInPort
+
+  }
+  database ADLDS
+
+}
+
+together {
+frame "user DashBoard" as IAM  #Yellow{
+    [Login] as IAMAuthentication
+
+
+
+    together {
+
+    frame  CreateUserPage #White {
+            [AssingShipto]
+
+           component validateUser as IAMValidateuser{
+                port " " as IAMValidateuserPort
+            }
+
+        component SearchSoldto {
+            [Search SoldTo For Extenral]
+            component "Search Sold To For Internal" as IAMSearchSoldtoUser{
+                port " " as IAMSearchSoldtoXomUserPort
+
+            }
+        }
+            component "getRoleList(Salesarea,RoleType)" as IAMGetRoleList{
+                port " " as IAMGetRoleListPort
+                note as a
+                    Need to send role + permission
+                end note
+
+            }
+            component "CreateUser(UserJson)" as IAMCreateUser{
+                port " " as IAMCreateUserPort
+                port " " as IAMCreateUserPortout
+
+            }
+
+    }
+
+    frame UpdateUserPage  #White {
+            [Resetpassword]
+            [Activate/Deactivate user]
+            [UpdateProfile]
+            [UpdateRole]
+            [UpdatePartner]
+            [UpdateSoldTo/ShipTo]
+    }
+
+    frame SearchUserPage #White{
+
+
+        component "getUserListBy(name or id + access token)" as IAMGetUserList{
+            port " " as IAMGetUserListPort
+        }
+
+        component "getUserDetailByID(id + access token)" as IAMGetUserDetailByID{
+                    port " " as IAMGetUserDetailByIDPort
+                }
+    }
+    }
+
+}
+
+
+frame "user DashBoard BFF" as IAMBFF #Yellow{
+   component "validateUser(ID)" as IAMBFFValidateUser  #White {
+    port "In" as IAMBFFvalidateUserPortIn
+    port "Out" as IAMBFFvalidateUserPortOut
+
+   }
+
+        component "getRoleList(Salesarea,RoleType)" as IAMBFFGetRoleList #White{
+            port " " as IAMBFFGetRoleListPortIn
+            port " " as IAMBFFGetRoleListPortOut
+                            note as b
+                                Need to send role + permission
+                            end note
+
+        }
+
+
+   component "SearchSoldto(ID/name)" as IAMBFFSearchSoldto #White {
+      port "In" as IAMBFFSearchSoldtoPortIn
+      port "Out" as IAMBFFSearchSOldtoPortOut
+
+     }
+
+   component "SearchUserList(ID/name + Soldto)" as IAMBFFSearchUserList #White{
+      port "In" as IAMBFFSearchUserListPortIn
+      port "Out" as IAMBFFSearchUserListPortOut
+
+     }
+
+
+   component "getUserDetail(ID)" as IAMBFFGetUserDetailByID #White{
+      port "In" as IAMBFFGetUserDetailByIDPortIn
+      port "Out" as IAMBFFGetUserDetailByIDPortOut
+
+     }
+
+
+   component "CreateUser(UserJson)" as IAMBFFCreateUser #White {
+      port "In" as IAMBFFCreateUserPortIn
+      port "Out" as IAMBFFCreateUserPortOut
+
+     }
+
+   component "UpdateUser(UserJson)" as IAMBFFUpdateUser #White{
+      port "In" as IAMBFFUpdateUserPortIn
+      port "Out" as IAMBFFUpdateUserPortOut
+     }
+}
+
+
+
+}
+
+
+
+frame "User Services" as IDPBFF #Yellow{
+
+        component "getRoleList(Salesarea,RoleType)" as IDPBFFGetRoleList #White{
+            port " " as IDPGetRoleListPortIn
+
+        }
+        database UserserviceDB
+
+        IDPBFFGetRoleList - UserserviceDB
+
+
+
+    frame "UserService Kafka Listener" as UserListener #White {
+        component "User Topic Listener" as UserTopicListener {
+            port " " as UserTopicListenerin
+            port " " as UserTopicListenerout
+
+        }
+
+    }
+
+
+}
+
+
+
+
+
+frame SMTPService {
+    [Email]
+}
+
+
+'Authenticaiton
+SSPLogin -(0- Auth0AuthenticationPort
+
+SSPUserDashboard <-> IAMAuthentication : Redirect
+IAMAuthentication #-(0- Auth0AuthenticationPort
+
+ACELogin -(0- PingSingInPort
+SSPOrder -> ACEOrder : Redirect
+ACEOrder -(0- PingFederatePort
+PingAuth0FederatePort -l- Auth0DB
+PingAdldsSingInPort -- ADLDS
+ACELogin -- ACEDB
+
+AzureDB --  Auth0AzureFederate
+Auth0AzureFederate -- Auth0SingIn
+
+
+' Create user
+
+IAMValidateuser #-(0- IAMBFFvalidateUserPortIn
+IAMBFFvalidateUserPortOut -(0- AUTH0UserManagementAPIPort
+IAMSearchSoldtoXomUserPort #-(0- IAMBFFSearchSoldtoPortIn
+IAMBFFSearchSOldtoPortOut -(0- CDSSearchSoldtoPort
+IAMGetRoleListPort -(0- IAMBFFGetRoleListPortIn
+IAMBFFGetRoleListPortOut -(0- IDPGetRoleListPortIn
+IAMCreateUserPortout -(0- IAMBFFCreateUserPortIn
+IAMBFFCreateUserPortOut -(0- GlobalKafka
+GlobalKafka -- xomKafka
+UserTopicport -0)- UserTopicListenerin
+xomKafka -0)-SSPKafkaListener
+UserTopicport -0)- ACEKafkaListener
+UserTopicListenerout -(0- AUTH0UserManagementAPIPort
+Notification -(0- SMTPService
+
+
+'Search User
+
+IAMGetUserListPort -(0- IAMBFFSearchUserListPortIn
+IAMBFFSearchUserListPortOut -(0- AUTH0UserManagementAPIPort
+IAMGetUserDetailByIDPort -(0- IAMBFFGetUserDetailByIDPortIn
+IAMBFFGetUserDetailByIDPortIn -(0- AUTH0UserManagementAPIPort
+
+
+'Updater user
+Resetpassword -(0- AUTH0UserManagementAPIPort
+[Activate/Deactivate user] -(0- AUTH0UserManagementAPIPort
+[UpdatePartner] -(0- IAMBFFUpdateUserPortIn
+[UpdateProfile] -(0- IAMBFFUpdateUserPortIn
+[UpdateRole] -(0- IAMBFFUpdateUserPortIn
+IAMBFFUpdateUserPortOut -(0- AUTH0UserManagementAPIPort
+
+@enduml

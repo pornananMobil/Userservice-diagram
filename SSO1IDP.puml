@@ -1,0 +1,159 @@
+
+@startuml
+'https://plantuml.com/component-diagram
+
+title User Service Diagram
+
+left to right direction
+
+skinparam linetype ortho
+
+
+
+package 1-click {
+    [CreatePrimary] as 1cCreatePrimary
+}
+
+package "SSP" {
+   [Login] as SSPLogin
+   [OrderPage] as SSPOrder
+   [KafkaListener] as SSPKafkaListener
+
+    database  SSPDB
+
+   SSPKafkaListener -> SSPDB
+
+}
+
+package "ACE"{
+       [Login] as ACELogin
+        [OrderPage] as ACEOrder
+        [KafkaListener] as ACEKafkaListener
+    [CreatePrimary]
+    [CreateSecondary]
+
+
+       database ACEDB
+    ACEKafkaListener -> ACEDB
+}
+
+
+together {
+    package XomIntegration{
+        [Kafka] as xomKafka
+    }
+
+    package ConferentKafka{
+        component "User Topic" as GlobalKafka{
+            port " " as UserTopicport
+        }
+    }
+}
+
+package "Auth0" {
+
+
+    component "Authentication" {
+        [Signin] as Auth0SingIn
+        port " " as Auth0AuthenticationPort
+
+    }
+
+   component "UserManagementAPI" as AUTH0UserManagementAPI {
+        port " " as AUTH0UserManagementAPIPort
+   }
+
+    [Notification]
+
+
+    together {
+      frame "SSP Users" as DBConnection {
+        database Auth0DB
+      }
+      frame "Internal Users" as AzureConnection {
+             [Federate] as Auth0AzureFederate
+      }
+      }
+
+}
+
+
+component "EMCloudAD Azure AD" {
+  database AzureDB
+  [Signin] as AzureSignIn
+  [Federate] as AzureFederate
+}
+
+
+
+component "PING" {
+  component Federate as PingFederate {
+    port "In" as PingFederatePort
+    port "Out" as PingAuth0FederatePort
+
+  }
+  component "Signin" as PingSingIn{
+    port " " as PingSingInPort
+    port " " as PingAdldsSingInPort
+
+  }
+  database ADLDS
+
+}
+
+
+
+
+
+
+frame "User Services" as IDPBFF #Yellow{
+
+    frame "UserService Kafka Listener" as UserListener #White {
+        component "User Topic Listener" as UserTopicListener {
+            port " " as UserTopicListenerin
+            port " " as UserTopicListenerout
+
+        }
+
+    }
+
+
+}
+
+
+
+
+
+frame SMTPService {
+    [Email]
+}
+
+
+'Authenticaiton
+SSPLogin -(0- Auth0AuthenticationPort
+
+ACELogin -(0- PingSingInPort #Orange
+SSPOrder -> ACEOrder : Redirect
+ACEOrder -(0- PingFederatePort
+PingAuth0FederatePort -l- Auth0DB
+PingAdldsSingInPort -- ADLDS
+ACELogin -- ACEDB
+
+AzureDB --  Auth0AzureFederate
+Auth0AzureFederate -- Auth0SingIn
+
+
+' Create user
+
+GlobalKafka -- xomKafka
+UserTopicport -0)- UserTopicListenerin
+xomKafka -0)-SSPKafkaListener
+UserTopicport -0)- ACEKafkaListener
+UserTopicListenerout -(0- AUTH0UserManagementAPIPort
+Notification -(0- SMTPService
+[CreatePrimary] -> ADLDS #Blue
+[CreateSecondary] -> ADLDS #Blue
+1cCreatePrimary -> Auth0DB #Blue
+
+
+@enduml

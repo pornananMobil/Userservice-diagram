@@ -1,0 +1,130 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+title User creation & SSO Flow
+
+
+autonumber
+
+
+actor XOM
+
+== User DashBoard, User creation Flow (By Internal user)==
+
+    XOM -> IAM : Create Page
+    XOM <-- IAM : Create page redirect
+
+
+
+
+        XOM -> IAM : EnterUserID
+        IAM -> IAM : Validateuserid (When user Step out of the ID box or click next)
+        activate IAM
+            IAM -> IAMBFF : validateUserID()
+            activate IAMBFF
+                IAMBFF -> AUTH0 : validateUserID
+                    activate AUTH0
+                        IAMBFF <-- AUTH0 : Ture/False
+                        alt False
+                            IAMBFF ->IDPHelper : getuser();
+                            activate IDPHelper
+                                IAMBFF <-- IDPHelper : exist or null
+                            deactivate IDPHelper
+                            alt exist
+                                IAMBFF -> IAMBFF : False
+                            else
+                                IAMBFF -> IAMBFF : True
+                            end
+                        end
+                    deactivate AUTH0
+                IAM <-- IAMBFF : Ture/False
+            deactivate IAMBFF
+        alt user exist = True
+            IAM --x XOM : User exist user update flow
+            deactivate IAM
+        else
+              IAM --> XOM : ok
+        end
+
+
+
+    loop select sold to until click Submit request
+        XOM ->IAM : Search Sold to (ID / Name)
+            activate IAM
+                IAM -> IAMBFF : Search Sold to (ID / Name)
+                    activate IAMBFF
+                        IAMBFF -> CDS : Search Sold to (ID / Name)
+                            activate CDS
+                                IAMBFF <-- CDS : List sold to + partner
+                            deactivate CDS
+                        IAMBFF -> IAMBFF : Filter data Sold to + partner + salesarea only
+                        IAM <-- IAMBFF : Sold to (with partner) list
+                    deactivate IAMBFF
+                IAM --> XOM : Sold to list
+            deactivate IAM
+
+
+       XOM -> IAM : Add Sold to / Update (salesarea)
+
+
+        XOM -> IAM : select RoleType
+            activate IAM
+                alt RoleType = Admin
+                IAM -> IAMBFF : get RoleList(salesarealist,RoleType.Admin)
+                    activate IAMBFF
+                        IAMBFF -> IDPBFF : getRole(salesarealist,RoleType.Admin)
+                            activate IDPBFF
+                                IDPBFF -> UserServiceDB : getRole(salesarealist,RoleType.Admin)
+                                IDPBFF <-- UserServiceDB
+                                IAMBFF <-- IDPBFF :  AdminRoleList
+                            deactivate IDPBFF
+                        IAM <-- IAMBFF : AdminRoleList
+                    deactivate IAMBFF
+                    IAM --> XOM : AdminRoleList as pre-select with readonly access
+                    IAM ->IAM : Assgin Wildcard for all ship to
+                else RoleType = Non-Admin
+                   IAM -> IAMBFF : getRoleList(salesarealist,RoleType.NonAdmin)
+                       activate IAMBFF
+                            IAMBFF -> IDPBFF : getRole(salesarealist,RoleType.NonAdmin)
+                                activate IDPBFF
+                                    IDPBFF -> UserServiceDB : getRole(salesarealist,RoleType.NonAdmin)
+                                    IDPBFF <-- UserServiceDB
+                                    IAMBFF <-- IDPBFF :  NonAdminRoleList
+                                deactivate IDPBFF
+                            IAM <--IAMBFF : NonAdminRoleList
+                       deactivate IAMBFF
+                        IAM --> XOM : NonAdminRoleList
+                        XOM -> IAM : Select roles
+                        IAM -> IAM : Select Ship to
+                end
+
+            deactivate IAM
+
+           alt Non-Admin Role
+                IAM -> XOM :  List of (Sold to / ship to)
+           else admin
+
+           end
+
+
+    end loop
+
+    XOM -> IAM : CreateUserSubmit();
+        activate IAM
+            IAM -> IAMBFF : createuser (User Jason)
+                activate IAMBFF
+                    IAMBFF -> IDPBFF : createuser (User Jason)
+                        activate IDPBFF
+                            IDPBFF -> ConfluentKafka : publish request
+                                activate ConfluentKafka
+                                    ConfluentKafka --> IDPBFF
+                                deactivate ConfluentKafka
+                                IAMBFF <-- IDPBFF : User create
+                        deactivate IDPBFF
+                    IAM <-- IAMBFF : User create
+                deactivate IAMBFF
+            XOM <-- IAM     : User create
+        deactivate IAM
+
+
+@enduml

@@ -1,0 +1,53 @@
+@startuml
+
+== Kafka process ==
+
+
+autonumber
+
+            IDPKafkaListener -> ConfluentKafka : GetEvent()
+                activate IDPKafkaListener
+                    IDPKafkaListener <-- ConfluentKafka
+                    IDPKafkaListener -> AUTH0 :CreateUser();
+                        activate AUTH0
+                            AUTH0 -> AUTH0DB : Createuser
+                            activate AUTH0DB
+                                AUTH0 <-- AUTH0DB
+                            deactivate AUTH0DB
+                            IDPKafkaListener <-- AUTH0
+                            deactivate IDPKafkaListener
+                            AUTH0 -> SMPTService : sendNotificationEmail() (URL , ID , PWD)
+                                activate SMPTService
+                                    SMPTService -> customer : sendNotificationEmail() (URL , ID , PWD)
+                            AUTH0 <-- SMPTService
+
+
+                        deactivate SMPTService
+                        deactivate AUTH0
+
+
+
+
+    deactivate IDPKafkaListener
+
+    XomIntegration -> ConfluentKafka : consume user create topic
+    activate XomIntegration
+    activate ConfluentKafka
+    XomIntegration <-- ConfluentKafka
+    deactivate XomIntegration
+    deactivate ConfluentKafka
+
+    SSP -> XomIntegration : consume user create topic
+    activate SSP
+        SSP <-- XomIntegration
+        SSP -> SSP : Create User
+    deactivate SSP
+
+        ACE -> ConfluentKafka : consume user create topic
+        activate ACE
+            ACE <-- ConfluentKafka
+            ACE -> ACE : Create User
+        deactivate ACE
+
+
+@enduml
